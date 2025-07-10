@@ -3,111 +3,133 @@ import numpy as np
 import re
 import torch
 
-# 检查 CUDA 是否可用
 device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"Using device: {device}")  # 输出使用的设备
+print(f"Using device: {device}")
 
-# 加载预训练模型并将其移动到 GPU（如果可用）
-model = SentenceTransformer('sentence-transformers/sentence-t5-xxl')
-model = model.to(device)  # 将模型移动到 GPU 或 CPU
+# 加载模型
+model = SentenceTransformer('google-bert/bert-base-chinese')
+model = model.to(device)
 
-# 定义一级标签及二级标签体系和解释
+# 标签体系
 tag_system = {
     "黄金三秒": {
-        "explanation": "在广告或宣传的前三秒，吸引观众注意力并触动他们的痛点或兴趣。",
+        "explanation": "在广告或宣传的前三秒，快速吸引观众注意力并触动他们的痛点或兴趣，是决定用户是否继续观看的关键环节。",
         "tags": [
-            {"label": "价格利益", "explanation": "通过强调价格优势吸引客户购买"},
-            {"label": "身份推荐", "explanation": "通过推荐身份提升客户购买意愿"},
-            {"label": "点名人群", "explanation": "明确指出目标客户群体，提高相关性"},
-            {"label": "直陈痛点", "explanation": "直接陈述客户痛点，引起共鸣"},
-            {"label": "直陈效果", "explanation": "直接说明产品或服务的效果"},
-            {"label": "提出疑问", "explanation": "通过提出问题引发客户兴趣"},
-            {"label": "引发好奇", "explanation": "通过制造悬念或好奇心吸引客户关注"},
-            {"label": "正话反说", "explanation": "通过反向表达方式引发注意"},
-            {"label": "塑造情绪", "explanation": "通过情感调动激发客户购买欲望"}
+            {
+                "label": "价格利益",
+                "explanation": "开场直接亮出产品的价格优势、特价活动或独家福利，用‘最低价’‘仅限今日’等词语迅速吸引关注，让观众感受到立省、超值等直接利益。"
+            },
+            {
+                "label": "身份推荐",
+                "explanation": "用权威身份、明星、达人、专业人士的口吻在开头强力背书，如‘皮肤科医生推荐’‘时尚博主自用款’，提升信任感和产品说服力。"
+            },
+            {
+                "label": "点名人群",
+                "explanation": "视频一开始就明确喊话目标人群，比如‘黄皮女生必看’‘上班族救星’，让对口用户立刻代入，提高停留和转化率。"
+            },
+            {
+                "label": "直陈痛点",
+                "explanation": "直击用户潜在困扰或需求痛点，例如‘素颜暗沉没气色？’‘底妆易卡粉？’，引发观众强烈共鸣，促使继续看下去。"
+            },
+            {
+                "label": "直陈效果",
+                "explanation": "直接用一句话概括产品带来的显著效果，如‘一抹亮肤三度’‘上脸秒变水光肌’，让观众立刻理解核心卖点。"
+            },
+            {
+                "label": "提出疑问",
+                "explanation": "用问题句式开头，激发观众思考与兴趣，例如‘你的素颜发光了吗？’‘为什么粉底总是假面？’，提高互动和参与度。"
+            },
+            {
+                "label": "引发好奇",
+                "explanation": "制造悬念或神秘感，比如‘只需三秒，肌肤竟然这样了！’‘为什么她不用粉底还这么亮？’，吸引观众继续观看解锁答案。"
+            },
+            {
+                "label": "正话反说",
+                "explanation": "反向表达，引发意外和注意力，如‘不想变白千万别用它’‘懒人千万别看’，利用矛盾心理刺激停留。"
+            },
+            {
+                "label": "塑造情绪",
+                "explanation": "用情绪感染观众，例如‘早起再也不慌了！’‘素颜也自信出门’，打造积极、真实的共鸣场景，增强代入感。"
+            }
         ]
     },
     "中间卖点": {
         "explanation": "在广告或销售中，强调产品的独特卖点和价值，以继续吸引客户。",
         "tags": [
-            {"label": "外观", "explanation": "通过强调产品外观来吸引客户"},
-            {"label": "材料", "explanation": "强调产品使用的材料和质量"},
-            {"label": "工艺", "explanation": "突出产品的工艺和制造过程"},
-            {"label": "价格", "explanation": "通过强调价格优势或优惠来吸引客户"},
-            {"label": "功能", "explanation": "展示产品的功能和实用性"},
-            {"label": "场景", "explanation": "通过应用场景的展示来吸引目标用户"},
-            {"label": "地域", "explanation": "强调产品在特定地域的独特性或优势"},
-            {"label": "人群", "explanation": "突出产品适用于特定人群的特点"},
-            {"label": "方法", "explanation": "介绍使用产品或服务的具体方法"},
-            {"label": "背书", "explanation": "通过权威背书增强产品信任度"},
-            {"label": "情怀", "explanation": "通过情感营销引发客户的共鸣"},
-            {"label": "稀缺", "explanation": "强调产品的稀缺性，提高购买欲望"}
+            {"label": "外观", "explanation": "突出产品本身的包装设计、造型、颜色、质感等外部视觉元素，比如独特瓶身、便携小巧、限量色彩、时尚感外观等，让观众被产品本体吸引。"},
+            {"label": "材料", "explanation": "详细介绍素颜霜中采用的主要成分、核心原料，如高端粉体、养肤配方、进口材料等，强调用料安全、品质保障、适合各种肤质。"},
+            {"label": "工艺", "explanation": "突出产品在制造工艺上的优势，比如纳米研磨、微粒包裹、精细乳化等高端工艺带来的上妆服帖、不卡粉、易推开等体验。"},
+            {"label": "价格", "explanation": "直接说明产品的优惠价格、性价比，或与大牌同款对比突出价格优势，让观众感觉物超所值。"},
+            {"label": "功能", "explanation": "详细介绍产品具备的具体功效，如提亮肤色、遮盖瑕疵、隐形毛孔、保湿持久、防汗不脱妆等，让观众理解使用后带来的实际改变。"},
+            {"label": "场景", "explanation": "结合日常生活场景，描述产品适用的具体环境，例如上班、约会、出门运动、健身房、旅行等，帮助观众代入真实使用感受。"},
+            {"label": "地域", "explanation": "结合产品在特定地域的口碑或流行度，例如‘日韩爆款’‘国货之光’‘海外明星推荐’等，提升信任度和新鲜感。"},
+            {"label": "人群", "explanation": "明确指出适用的人群特征，例如黄皮、暗沉、油皮、干皮、学生党、上班族、宝妈等，帮助观众对号入座，增强关联。"},
+            {"label": "方法", "explanation": "具体说明产品的使用方法、用量、步骤，比如‘三秒抹匀’‘直接当面霜’‘素颜懒人必备’等，让观众更容易上手。"},
+            {"label": "背书", "explanation": "强调权威背书或明星达人种草、医生推荐、成分党验证等，增强产品可信度和口碑影响力。"},
+            {"label": "情怀", "explanation": "通过情感故事、品牌理念、用户真实体验等内容激发观众共鸣，如‘陪伴成长’‘天然守护’‘国货自信’等。"},
+            {"label": "稀缺", "explanation": "突出产品限量、热卖、断货、抢购、稀有色号、限定版等稀缺属性，刺激观众的购买冲动。"}
         ]
     },
+
     "行动号召": {
         "explanation": "在广告或营销中，直接激励客户采取行动，达成购买或其他目标。",
         "tags": [
-            {"label": "优惠诱导", "explanation": "通过优惠信息激励客户行动"},
-            {"label": "饥饿营销", "explanation": "通过营造紧迫感诱导客户快速购买"},
-            {"label": "艾特人群", "explanation": "通过艾特特定人群引导他们进行购买"},
-            {"label": "从众引导", "explanation": "通过从众心理引导客户进行购买"},
-            {"label": "身份推荐", "explanation": "通过身份推荐激发客户购买欲望"}
+            {"label": "优惠诱导", "explanation": "通过限时折扣、满减、买赠、专属券等优惠信息，引导观众马上下单抢购，错过可惜。"},
+            {"label": "饥饿营销", "explanation": "营造库存紧张、热卖断货、即将涨价等紧迫氛围，激发观众‘现在不买马上没货’的紧张感。"},
+            {"label": "艾特人群", "explanation": "在文案中@姐妹、@闺蜜、@男朋友、@妈妈等，引导观众转发、分享、安利身边的人一起来下单。"},
+            {"label": "从众引导", "explanation": "通过展示众多用户好评、销量排行榜、万人种草等内容，激发观众‘大家都买我也要买’的从众心理。"},
+            {"label": "身份推荐", "explanation": "通过达人身份、医生、明星、专家等专业角色推荐，增强观众的信任感和决策信心。"}
         ]
     }
 }
 
-# 分句函数，保留标点符号
 def split_sentences_with_punctuation(text):
-    # 使用正则表达式根据标点符号进行分句并保留标点符号
     sentences = re.findall(r'[^，。！？；]*[，。！？；]*', text)
-    sentences = [s.strip() for s in sentences if s.strip()]  # 去除多余空格并去掉空字符串
+    sentences = [s.strip() for s in sentences if s.strip()]
     return sentences
 
-# 规则匹配函数
-def match_label(script, labels):
-    # 使用 SentenceTransformer 模型计算语义嵌入并将脚本和标签转移到 GPU
-    script_embedding = model.encode(script, convert_to_tensor=True, device=device)
-    label_embeddings = model.encode([label['label'] for label in labels], convert_to_tensor=True, device=device)
+def match_primary_label(sentence, tag_system):
+    explanations = [v["explanation"] for v in tag_system.values()]
+    labels = list(tag_system.keys())
+    embedding = model.encode(sentence, convert_to_tensor=True, device=device)
+    label_embeddings = model.encode(explanations, convert_to_tensor=True, device=device)
+    cosine_scores = util.pytorch_cos_sim(embedding, label_embeddings)
+    scores = cosine_scores.cpu().detach().numpy()[0]
+    best_idx = np.argmax(scores)
+    return labels[best_idx], explanations[best_idx], scores[best_idx]
 
-    # 计算相似度
-    cosine_scores = util.pytorch_cos_sim(script_embedding, label_embeddings)
-
-    # 将结果从 GPU 转移到 CPU，再转换为 NumPy 数组
-    cosine_scores_cpu = cosine_scores.cpu().detach().numpy()
-
-    # 找到最相似的标签索引
-    best_label_idx = np.argmax(cosine_scores_cpu)
-
-    # 返回最相似的标签和对应的解释
-    best_label = labels[best_label_idx]
-    return best_label['label'], best_label['explanation'], cosine_scores_cpu[0][best_label_idx]
+def match_secondary_label(sentence, tags):
+    tag_labels = [t['label'] for t in tags]
+    tag_explanations = [t['explanation'] for t in tags]
+    embedding = model.encode(sentence, convert_to_tensor=True, device=device)
+    label_embeddings = model.encode(tag_labels, convert_to_tensor=True, device=device)
+    cosine_scores = util.pytorch_cos_sim(embedding, label_embeddings)
+    scores = cosine_scores.cpu().detach().numpy()[0]
+    best_idx = np.argmax(scores)
+    return tag_labels[best_idx], tag_explanations[best_idx], scores[best_idx]
 
 # 测试脚本
 script = "什么叫素颜发光？黄皮姐妹有福啦！平时涂粉底卡纹又假面，出门没多久领子就被蹭黄。这支素颜霜，直接当乳液三秒抹开，秒变妈生水光皮！它含大牌粉底同源粉体，成膜后扒得牢，穿黑T也蹭不掉。橄榄皮涂完秒变冷白皮，出汗健身自带柔光灯，闺蜜还以为你打了水光针！"
-
-# 分句并保留标点符号
 sentences = split_sentences_with_punctuation(script)
 
-# 对每一句进行标签匹配
 for idx, sentence in enumerate(sentences):
-    # 获取所有一级标签和二级标签
-    all_labels = sum([category['tags'] for category in tag_system.values()], [])
-
-    # 如果是第一句，标签固定为“黄金三秒”
     if idx == 0:
         primary_label_category = "黄金三秒"
         primary_label_explanation = tag_system["黄金三秒"]["explanation"]
-        primary_label = "直陈效果"  # 可选择默认的二级标签（例如：直陈效果）
-        secondary_label = primary_label
+        primary_similarity_score = 1.0
+        secondary_label = "直陈效果"
         explanation = "直接说明产品或服务的效果"
-        similarity_score = 1.0  # 第一条固定标签，设置为最高相似度
+        similarity_score = 1.0
     else:
-        primary_label, explanation, similarity_score = match_label(sentence, all_labels)
-        # 获取一级标签和解释
-        primary_label_category = [category for category, data in tag_system.items() if any(label['label'] == primary_label for label in data['tags'])][0]
-        primary_label_explanation = tag_system[primary_label_category]["explanation"]
-        secondary_label = primary_label
-
+        # 只允许“中间卖点”和“行动号召”参与一级标签匹配
+        restrict_tag_system = {k: v for k, v in tag_system.items() if k in ["中间卖点", "行动号召"]}
+        primary_label_category, primary_label_explanation, primary_similarity_score = match_primary_label(
+            sentence, restrict_tag_system
+        )
+        secondary_label, explanation, similarity_score = match_secondary_label(
+            sentence, tag_system[primary_label_category]["tags"]
+        )
     print(f"句子: {sentence}")
-    print(f"一级标签: {primary_label_category} (解释: {primary_label_explanation})")
-    print(f"二级标签: {secondary_label} (解释: {explanation}) (相似度: {similarity_score:.4f})\n")
+    print(f"一级标签: {primary_label_category} (解释: {primary_label_explanation}) (一级标签相似度: {primary_similarity_score:.4f})")
+    print(f"二级标签: {secondary_label} (解释: {explanation}) (二级标签相似度: {similarity_score:.4f})\n")
+
